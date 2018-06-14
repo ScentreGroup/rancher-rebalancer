@@ -6,7 +6,7 @@ import (
 	rancher "github.com/rancher/go-rancher/v2"
 )
 
-// returns true or false if rebalance will happen based on container load of servers
+// returns true or false if container service is balanced
 func evenLoad(client *rancher.RancherClient, projectId string) bool {
 	hostIds := map[string]int{}
 	hostConMap := map[string]int{}
@@ -62,7 +62,9 @@ func Rebalance(client *rancher.RancherClient, projectId string, mode string) {
 		var serviceInstanceID = serviceIDList(client, projectId)
 
 		for service := range serviceInstanceID {
+
 			log.Info("processing service: " + service)
+
 			serviceHosts(client, serviceInstanceID[service], hostList, projectId, mode)
 		}
 	} else {
