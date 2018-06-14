@@ -50,7 +50,7 @@ func evenLoad(client *rancher.RancherClient, projectId string) bool {
 }
 
 // rebalances containers between nodes
-func Rebalance(client *rancher.RancherClient, projectId string, mode string) int {
+func Rebalance(client *rancher.RancherClient, projectId string, mode string) {
 	var balanced = false
 
 	if mode != "aggressive" {
@@ -65,11 +65,8 @@ func Rebalance(client *rancher.RancherClient, projectId string, mode string) int
 			log.Info("processing service: " + service)
 			serviceHosts(client, serviceInstanceID[service], hostList, projectId, mode)
 		}
-
 	} else {
 		log.Info("server load balanced, aggressive mode would need to be used to enforce container balancing")
-		return 1
+		return
 	}
-
-	return 1
 }
