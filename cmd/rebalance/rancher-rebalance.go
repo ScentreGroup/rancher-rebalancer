@@ -64,6 +64,12 @@ func main() {
 			Usage:  "the rebalancing strategy to use",
 			EnvVar: "REBALANCE_MODE",
 		},
+		cli.IntFlag{
+			Name:   "poll-interval,t",
+			Usage:  "polling interval in seconds",
+			EnvVar: "POLL_INTERVAL",
+			Value:  60,
+		},
 		// not yet implemented
 		cli.BoolFlag{
 			Name:  "dry",
@@ -122,9 +128,9 @@ func start(c *cli.Context) error {
 	// main loop
 	log.Debug("entering main loop")
 	for {
-		var returnCode = 0
-		returnCode = evencattle.Rebalance(rancherClient, projectId, c.String("mode"))
-		time.Sleep(time.Duration(returnCode) * time.Minute)
+		log.Debug("scan started at ", time.Now())
+		evencattle.Rebalance(rancherClient, projectId, c.String("mode"))
+		time.Sleep(time.Duration(c.Int("poll-interval")) * time.Second)
 	}
 
 	return nil

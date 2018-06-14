@@ -12,4 +12,6 @@ FROM centurylink/ca-certs
 
 COPY --from=builder /opt/bin/rancher-rebalancer /opt/bin/rancher-rebalancer
 
-ENTRYPOINT ["/opt/bin/rancher-rebalancer"]
+WORKDIR /opt/bin
+
+ENTRYPOINT ["./rancher-rebalancer"]

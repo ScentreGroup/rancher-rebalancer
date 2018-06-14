@@ -15,8 +15,6 @@ type Client struct {
 	client *rancher.RancherClient
 }
 
-var withoutPagination *rancher.ListOpts
-
 func CreateClient(url, accessKey, secretKey string) *rancher.RancherClient {
 	client, err := rancher.NewRancherClient(&rancher.ClientOpts{
 		Url:       url,

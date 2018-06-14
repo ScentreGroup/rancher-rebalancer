@@ -10,8 +10,14 @@ import (
 	rancher "github.com/rancher/go-rancher/v2"
 )
 
+var (
+	withoutPagination = &rancher.ListOpts{
+		Filters: map[string]interface{}{"limit": 0},
+	}
+)
+
 //Function to return a list of services
-func serviceIDList(client *rancher.RancherClient, projectID string) map[string]serviceDef {
+func serviceIDList(client *rancher.RancherClient, projectId string) map[string]serviceDef {
 	var service = map[string]serviceDef{}
 
 	var rancherServices = map[string]string{
@@ -22,14 +28,15 @@ func serviceIDList(client *rancher.RancherClient, projectID string) map[string]s
 		"metadata":        "",
 		"rancher-agent1":  ""}
 
-	// get a list of hosts in this environment
-	services, err := client.Service.List(nil)
+	// get a list of services in this environment
+	services, err := client.Service.List(withoutPagination)
 	if err != nil {
 		log.Error(err)
 	}
+	log.Debug("all services: ", services)
 
 	for _, h := range services.Data {
-		if h.AccountId == projectID {
+		if h.AccountId == projectId {
 			if _, exists := rancherServices[h.Name]; exists {
 				//Ignore it as its a Rancher Service
 			} else {
@@ -156,21 +163,24 @@ func serviceHosts(client *rancher.RancherClient, service serviceDef, hostList ma
 					if (mode == "aggressive") && (balanced) {
 						//make the current host inactive
 						currentHost, _ := client.Host.ById(highest)
+						log.Debug("deactivating host ", currentHost)
 						client.Host.ActionDeactivate(currentHost)
 					}
 
-					//Delete the container
+					// delete the container
 					containerToDelete, err := client.Container.ById(instance)
+					log.Debug("deleting container, ", containerToDelete)
 					client.Container.Delete(containerToDelete)
 					if err != nil {
 						log.Error(err)
 					}
 
-					//Wait for 10 seconds to allow for allocations service to allocate new server
+					// wait for 10 seconds to allow for allocations service to allocate new server
 					time.Sleep(10 * time.Second)
 					if (mode == "aggressive") && (balanced) {
-						//make the current host inactive
+						// make the current host inactive
 						currentHost, _ := client.Host.ById(highest)
+						log.Debug("activating host ", currentHost)
 						client.Host.ActionActivate(currentHost)
 					}
 					break
