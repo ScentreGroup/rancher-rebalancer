@@ -8,6 +8,7 @@ import (
 
 	"io/ioutil"
 
+	"github.com/ScentreGroup/rancher-rebalancer"
 	"github.com/Sirupsen/logrus"
 	"github.com/rancher/go-rancher/v2"
 )

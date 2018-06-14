@@ -1,4 +1,4 @@
-package main
+package evencattle
 
 type serviceDef struct {
 	name        string

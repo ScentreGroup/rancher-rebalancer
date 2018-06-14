@@ -10,3 +10,9 @@ What this rebalancer does is attempt to redistribute them more evenly across hos
 
 Services must be labelled for rebalancing to take place. Each service that you want to be rebalanced must have a label of ```rebalance``` set to ```true```
 
+## Usage
+
+### Install deps
+
+    $ go get ./...
+    
