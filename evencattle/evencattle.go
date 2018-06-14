@@ -165,7 +165,7 @@ func serviceHosts(client *rancher.RancherClient, service serviceDef, hostList ma
 					containerToDelete, err := client.Container.ById(instance)
 					client.Container.Delete(containerToDelete)
 					if err != nil {
-						logrus.Error(err)
+						log.Error(err)
 					}
 
 					//Wait for 10 seconds to allow for allocations service to allocate new server
@@ -180,7 +180,7 @@ func serviceHosts(client *rancher.RancherClient, service serviceDef, hostList ma
 			}
 		}
 	} else {
-		logrus.Info("Service is already balanced")
+		log.Info("service is already balanced")
 	}
 
 	return 1
