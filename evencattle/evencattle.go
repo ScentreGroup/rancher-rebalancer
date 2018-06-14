@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
-
 	r "github.com/ScentreGroup/rancher-rebalancer/rancher"
 	log "github.com/Sirupsen/logrus"
 	rancher "github.com/rancher/go-rancher/v2"
