@@ -108,7 +108,7 @@ func start(c *cli.Context) error {
  		time.Sleep(3 * time.Second)
 
 		environmentName := r.GetMetadataEnvironmentName(c.String("rancher-metadata-url"))
-		log.Info("rancher environment set to " + environmentName)
+		log.Info("using rancher environment, '" + environmentName + "'")
 		projectId = r.GetProjectIdByName(rancherClient, environmentName)
 		log.Debug("project id is " + projectId)
 	}
