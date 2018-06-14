@@ -54,7 +54,7 @@ func serviceIDList(client *rancher.RancherClient, projectID string) map[string]s
 					}
 
 					if affinity {
-						logrus.Info("not balancing " + h.Name + " due to affinity rules")
+						log.Debug("not balancing " + h.Name + " due to affinity rules")
 					} else {
 						var add = true
 
@@ -90,7 +90,7 @@ func serviceIDList(client *rancher.RancherClient, projectID string) map[string]s
 
 					}
 				} else {
-					logrus.Info("service " + h.Name + " only has 1 container, not balancing")
+					log.Debug("service " + h.Name + " only has 1 container, not balancing")
 				}
 			}
 		}
