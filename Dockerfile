@@ -1,21 +1,15 @@
-FROM gliderlabs/alpine:3.4
-MAINTAINER chrisurwin
+FROM golang:1.9-alpine3.7 as builder
 
-EXPOSE 9777
+COPY . /go/src/github.com/scentregroup/rancher-rebalancer
 
-RUN addgroup cleanup \
- && adduser -S -G cleanup cleanup
+WORKDIR /go/src/github.com/scentregroup/rancher-rebalancer/cmd/rebalance
 
-COPY ./*.go /go/src/github.com/chrisurwin/rancher-rebalancer/
+RUN apk add --update --no-cache git gcc musl-dev && \
+    go get ./... && \
+    CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o /opt/bin/rancher-rebalancer .
 
-RUN apk --update add ca-certificates \
- && apk --update add --virtual build-deps go git \
- && cd /go/src/github.com/chrisurwin/rancher-rebalancer \
- && GOPATH=/go go get \
- && GOPATH=/go go build -o /bin/rancher-rebalancer \
- && apk del --purge build-deps \
- && rm -rf /go/bin /go/pkg /var/cache/apk/*
+FROM centurylink/ca-certs
 
-USER cleanup
+COPY --from=builder /opt/bin/rancher-rebalancer /opt/bin/rancher-rebalancer
 
-ENTRYPOINT [ "/bin/rancher-rebalancer" ]
+ENTRYPOINT ["/opt/bin/rancher-rebalancer"]
