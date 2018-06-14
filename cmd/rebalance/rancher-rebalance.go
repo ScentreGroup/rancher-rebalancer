@@ -105,9 +105,12 @@ func start(c *cli.Context) error {
 
 		// observed race condition where metadata is not yet updated immediately
 		log.Debug("taking a quick snooze to allow metadata to be refreshed")
- 		time.Sleep(3 * time.Second)
+ 		time.Sleep(5 * time.Second)
 
 		environmentName := r.GetMetadataEnvironmentName(c.String("rancher-metadata-url"))
+
+		// TODO: if return is Not found - try again (metadata was still not up-to-date)
+
 		log.Info("using rancher environment, '" + environmentName + "'")
 		projectId = r.GetProjectIdByName(rancherClient, environmentName)
 		log.Debug("project id is " + projectId)
