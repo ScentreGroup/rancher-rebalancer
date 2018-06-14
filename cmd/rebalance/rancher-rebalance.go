@@ -99,12 +99,18 @@ func start(c *cli.Context) error {
 		c.String("rancher-access-key"),
 		c.String("rancher-secret-key"))
 
+	// assume we should get the env that the container is running in
 	if len(c.String("rancher-environment")) < 1 {
-		// assume we should get the env that the container is running in
+		log.Debug("no specific environment provided, getting current environment from metadata server")
+
+		// observed race condition where metadata is not yet updated immediately
+		log.Debug("taking a quick snooze to allow metadata to be refreshed")
+ 		time.Sleep(3 * time.Second)
+
 		environmentName := r.GetMetadataEnvironmentName(c.String("rancher-metadata-url"))
 		log.Info("rancher environment set to " + environmentName)
-
 		projectId = r.GetProjectIdByName(rancherClient, environmentName)
+		log.Debug("project id is " + projectId)
 	}
 
 	// start the health check server in a sub-process
