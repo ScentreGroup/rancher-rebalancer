@@ -100,8 +100,10 @@ func GetContainerHost(client *rancher.RancherClient, containerId string) string 
 
 // returns the environment name of self via metadata service
 func GetMetadataEnvironmentName(rancherMetadataUrl string) string {
-	resp, err := http.Get(rancherMetadataUrl + "/latest/self/stack/environment_name")
+	url := rancherMetadataUrl + "/latest/self/stack/environment_name"
+	log.Debug("attempting to fetch environment from " + url)
 
+	resp, err := http.Get(url)
 	if err != nil {
 		log.Errorf("rancher metadata not available ", err)
 	}
