@@ -128,6 +128,7 @@ func start(c *cli.Context) error {
 	// main loop
 	log.Debug("entering main loop")
 	for {
+		log.Debug("scan started at ", time.Now())
 		evencattle.Rebalance(rancherClient, projectId, c.String("mode"))
 		time.Sleep(time.Duration(c.Int("poll-interval")) * time.Second)
 	}
