@@ -58,17 +58,25 @@ func main() {
 			Usage:  "base url of the rancher metadata service",
 			EnvVar: "RANCHER_METADATA_URL",
 		},
+		// TODO: not yet implemented
+		// we found that simply upgrading the service doesn't spread even
+		// cli.StringFlag{
+		// 	Name:   "strategy",
+		// 	Value:  "condel",
+		// 	Usage:  "the rebalancing strategy to use (condel or upgrade)",
+		// 	EnvVar: "REBALANCE_STATEGY",
+		// },
 		cli.StringFlag{
-			Name:   "mode",
-			Value:  "calm",
-			Usage:  "the rebalancing strategy to use",
-			EnvVar: "REBALANCE_MODE",
+			Name:   "label-filter",
+			Usage:  "filter services by a label, default is rebalance=true",
+			Value:  "rebalance=true",
+			EnvVar: "REBALANCE_LABEL_FILTER",
 		},
 		cli.IntFlag{
 			Name:   "poll-interval,t",
 			Usage:  "polling interval in seconds",
 			EnvVar: "POLL_INTERVAL",
-			Value:  60,
+			Value:  0,
 		},
 		// not yet implemented
 		cli.BoolFlag{
@@ -111,7 +119,7 @@ func start(c *cli.Context) error {
 
 		// observed race condition where metadata is not yet updated immediately
 		log.Debug("taking a quick snooze to allow metadata to be refreshed")
- 		time.Sleep(5 * time.Second)
+		time.Sleep(5 * time.Second)
 
 		environmentName := r.GetMetadataEnvironmentName(c.String("rancher-metadata-url"))
 
@@ -125,12 +133,15 @@ func start(c *cli.Context) error {
 	// start the health check server in a sub-process
 	evencattle.StartHealthCheck()
 
-	// main loop
-	log.Debug("entering main loop")
-	for {
-		log.Debug("scan started at ", time.Now())
-		evencattle.Rebalance(rancherClient, projectId, c.String("mode"))
-		time.Sleep(time.Duration(c.Int("poll-interval")) * time.Second)
+	if c.Int("poll-interval") > 0 {
+		log.Debug("entering main loop")
+		for {
+			log.Debug("scan started at ", time.Now())
+			evencattle.Rebalance(rancherClient, projectId, c.String("label-filter"))
+			time.Sleep(time.Duration(c.Int("poll-interval")) * time.Second)
+		}
+	} else {
+		evencattle.Rebalance(rancherClient, projectId, c.String("label-filter"))
 	}
 
 	return nil
