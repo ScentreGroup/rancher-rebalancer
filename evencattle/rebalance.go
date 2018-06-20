@@ -62,6 +62,12 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 		stackName := r.GetStackNameById(client, s.StackId)
 		serviceRef := stackName + "/" + s.Name
 
+		// reject an inactive service
+		if s.State == "inactive" {
+			log.Debugf("skipping service, %s due to being inactive", serviceRef)
+			excluded = true
+		}
+
 		// reject a global service
 		for k, v := range s.LaunchConfig.Labels {
 			if k == "io.rancher.scheduler.global" && v == "true" {
