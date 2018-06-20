@@ -107,7 +107,7 @@ func start(c *cli.Context) error {
 		os.Exit(1)
 	}
 
-	log.Info("starting rancher rebalancer")
+	log.Info("start rancher rebalancer")
 
 	rancherClient := r.CreateClient(c.String("rancher-url"),
 		c.String("rancher-access-key"),
@@ -125,7 +125,7 @@ func start(c *cli.Context) error {
 
 		// TODO: if return is Not found - try again (metadata was still not up-to-date)
 
-		log.Info("using rancher environment, '" + environmentName + "'")
+		log.Infof("using the %s environment", environmentName)
 		projectId = r.GetProjectIdByName(rancherClient, environmentName)
 		log.Debug("project id is " + projectId)
 	}
@@ -133,8 +133,9 @@ func start(c *cli.Context) error {
 	// start the health check server in a sub-process
 	evencattle.StartHealthCheck()
 
+	log.Info("entering main loop")
+
 	if c.Int("poll-interval") > 0 {
-		log.Debug("entering main loop")
 		for {
 			log.Debug("scan started at ", time.Now())
 			evencattle.Rebalance(rancherClient, projectId, c.String("label-filter"))

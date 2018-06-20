@@ -45,7 +45,16 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 	} else {
 		services = collection
 	}
-	log.Info(len(services), " service(s) eligible for possible re-balancing")
+
+	// bail if there is nothing to balance
+	if len(services) < 1 {
+		log.Info("no candidate services to rebalance found")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"candidate_count": len(services),
+	}).Info("rebalancing services")
 
 	// main services iteration
 	for _, s := range services {
@@ -73,13 +82,8 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 			log.Debugf("service %s has been excluded", serviceRef)
 		} else {
 			// move onto balancing the service if not excluded
-			log.Infof("start balance for %s", serviceRef)
-
-			// containers of the service
-			log.Debugf("container instances: %s", s.InstanceIds)
 
 			containers := r.ListContainersByInstanceIds(client, s.InstanceIds)
-			//log.Debug(containers)
 
 			// algo to establish the spread of containers
 			// iterate on each container
@@ -103,7 +107,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 					spread = append(spread, &c)
 				}
 			}
-			spew.Dump(spread)
+			log.Debug(spew.Sdump(spread))
 		}
 
 		// get number of hosts in play
@@ -111,7 +115,14 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 		numHosts := len(spread)
 		perHost := s.Scale / int64(numHosts)
 		log.Debug("number of hosts: ", numHosts)
-		log.Infof("scale: %s, expected per host, %s", s.Scale, perHost)
+		log.Debugf("scale: %s, expected per host, %s", s.Scale, perHost)
+
+		log.WithFields(log.Fields{
+			"containers": s.InstanceIds,
+			"host_count": numHosts,
+			"scale": s.Scale,
+			"expected_per_host": perHost,
+		}).Infof("balance %s", serviceRef)
 
 		// iterate over each host in spread
 		for _, m := range spread {
@@ -133,7 +144,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 
 				// second, kill the containers on the host
 				// we currently delete all containers because scale is always > 1
-				log.Debug("now kill the containers on ", m.HostId)
+				log.Debug("kill containers on ", m.HostId)
 				for _, v := range spread {
 					if v.HostId == m.HostId {
 						for _, containerId := range v.ContainerIds {
@@ -144,7 +155,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 					}
 				}
 
-				// a healthy snnooze to allow time to re-schedule
+				// a healthy snooze to allow re-scheduling to occur
 				time.Sleep(10 * time.Second)
 
 				// third, re-active the host
