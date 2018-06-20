@@ -46,6 +46,12 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 		services = collection
 	}
 
+	// bail if there is nothing to balance
+	if len(services) < 1 {
+		log.Info("no candidate services to rebalance found")
+		return
+	}
+
 	log.WithFields(log.Fields{
 		"candidate_count": len(services),
 	}).Info("rebalancing services")
