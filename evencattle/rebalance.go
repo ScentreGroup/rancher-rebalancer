@@ -102,7 +102,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 					spread = append(spread, &c)
 				}
 			}
-			spew.Dump(spread)
+			log.Debug(spew.Sdump(spread))
 		}
 
 		// get number of hosts in play
