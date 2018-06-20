@@ -204,7 +204,7 @@ func ListContainersByInstanceIds(client *rancher.RancherClient, instanceIds []st
 	return containersList
 }
 
-// gets a stack name by stack id
+// gets a container by container id
 func GetContainerById(client *rancher.RancherClient, containerId string) *rancher.Container {
 	container, err := client.Container.ById(containerId)
 	if err != nil {
