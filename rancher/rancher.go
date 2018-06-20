@@ -8,11 +8,22 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/imdario/mergo"
 	rancher "github.com/rancher/go-rancher/v2"
 )
 
 type Client struct {
 	client *rancher.RancherClient
+}
+
+func baseListOpts() *rancher.ListOpts {
+	return &rancher.ListOpts{
+		Filters: map[string]interface{}{
+			"limit":  -2,
+			"all":    true,
+			"system": false,
+		},
+	}
 }
 
 func CreateClient(url, accessKey, secretKey string) *rancher.RancherClient {
@@ -110,6 +121,24 @@ func GetMetadataEnvironmentName(rancherMetadataUrl string) string {
 	return strings.Replace(string(body), "\"", "", -1)
 }
 
+// de-activates a rancher host
+func DeactivateHostByName(client *rancher.RancherClient, hostName string) bool {
+	// get a list of hosts
+	hosts, err := client.Host.List(nil)
+	if err != nil {
+		log.Error(err)
+	}
+
+	for _, h := range hosts.Data {
+		if h.Hostname == hostName {
+			client.Host.ActionEvacuate(&h)
+			return true
+		}
+	}
+
+	return false
+}
+
 // evacuates a rancher host
 func EvacuateHostByName(client *rancher.RancherClient, hostName string) bool {
 	// get a list of hosts
@@ -126,4 +155,61 @@ func EvacuateHostByName(client *rancher.RancherClient, hostName string) bool {
 	}
 
 	return false
+}
+
+func ListRancherServices(client *rancher.RancherClient, projectId string, filter *rancher.ListOpts) []*rancher.Service {
+	var servicesList []*rancher.Service
+	listOpts := baseListOpts()
+
+	// merge in user-provided filter
+	if err := mergo.MergeWithOverwrite(listOpts, filter); err != nil {
+		log.Errorf("error while merging filters: %s", err)
+	}
+	log.Debug("using filter: ", listOpts)
+
+	services, err := client.Service.List(listOpts)
+	if err != nil {
+		log.Error(err)
+	}
+
+	for k := range services.Data {
+		servicesList = append(servicesList, &services.Data[k])
+	}
+
+	return servicesList
+}
+
+// gets a stack name by stack id
+func GetStackNameById(client *rancher.RancherClient, stackId string) string {
+	stack, err := client.Stack.ById(stackId)
+	if err != nil {
+		log.Error(err)
+	}
+
+	return stack.Name
+}
+
+func ListContainersByInstanceIds(client *rancher.RancherClient, instanceIds []string) []*rancher.Container {
+	var containersList []*rancher.Container
+
+	for _, v := range instanceIds {
+		container, err := client.Container.ById(v)
+		if err != nil {
+			log.Error(err)
+		}
+
+		containersList = append(containersList, container)
+	}
+
+	return containersList
+}
+
+// gets a stack name by stack id
+func GetContainerById(client *rancher.RancherClient, containerId string) *rancher.Container {
+	container, err := client.Container.ById(containerId)
+	if err != nil {
+		log.Error(err)
+	}
+
+	return container
 }
