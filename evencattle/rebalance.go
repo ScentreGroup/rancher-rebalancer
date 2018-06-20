@@ -54,7 +54,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 
 	log.WithFields(log.Fields{
 		"candidate_count": len(services),
-	}).Info("rebalancing services")
+	}).Info("rebalance services")
 
 	// main services iteration
 	for _, s := range services {
