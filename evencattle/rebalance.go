@@ -3,21 +3,98 @@ package evencattle
 import (
 	"strings"
 	"time"
+	"bytes"
+	"strconv"
+	"io/ioutil"
+	"net/http"
 
+	"github.com/urfave/cli"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/flaccid/slack-incoming-webhook-tools/util"
 	r "github.com/ScentreGroup/rancher-rebalancer/rancher"
 	log "github.com/Sirupsen/logrus"
-	"github.com/davecgh/go-spew/spew"
 	rancher "github.com/rancher/go-rancher/v2"
 )
 
 type HostContainerCount struct {
 	HostId       string
+	Hostname     string
 	Count        int
 	ContainerIds []string
 }
 
-func Rebalance(client *rancher.RancherClient, projectId string, labelFilter string) {
+func NotifySlack(c *cli.Context, msg string) {
+	if len(c.String("webhook-url")) < 1 {
+		log.Debugf("No webhook url provided so no sending notification to slack")
+		return
+	}
+
+	url := c.String("webhook-url")
+	var payload []byte
+
+	// use default message
+	if len(c.String("payload")) < 1 && len(c.String("template")) < 1 {
+		payload = []byte(msg)
+	} else if len(c.String("payload")) >= 1{
+		payload = []byte(c.String("payload"))
+	} else {
+		// get environment variables to supply to the template
+		env := util.ReadEnv()
+		log.Debug("env: ", env)
+
+		// load template
+		t, err := util.Parse(c.String("template"))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// render the template
+		var tpl bytes.Buffer
+		if err := t.Execute(&tpl, env); err != nil {
+			log.Fatal(err)
+		}
+		log.Debug("rendered: ", tpl.String())
+
+		payload = []byte(tpl.String())
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+
+	log.WithFields(log.Fields{
+		"payload": string(payload),
+		"headers": req.Header,
+	}).Debug("request")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.WithFields(log.Fields{
+		"status":  resp.Status,
+		"headers": resp.Header,
+		"body":    string(body),
+	}).Debug("response")
+
+	return
+}
+
+//func Rebalance(client *rancher.RancherClient, projectId string, labelFilter string, dryRun bool, slackWebhookUrl string, slackChannel string) {
+func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) {
 	var services []*rancher.Service
+	labelFilter := c.String("label-filter")
+	dryRun := c.GlobalBool("dry")
 
 	// TODO: work out how to to filter modifier for scale>1
 	filter := &rancher.ListOpts{
@@ -107,6 +184,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 				if !exists {
 					c := HostContainerCount{
 						HostId:       v.HostId,
+						Hostname:		  v.Hostname,
 						Count:        1,
 						ContainerIds: []string{v.Id},
 					}
@@ -124,10 +202,10 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 			// means the service does not have an affinity host label
 			numHosts = len(spread)
 		}
-		perHost := s.Scale / int64(numHosts)
+		perHost := int(s.Scale) / int(numHosts)
 
 		// this is to avoid endless rebalancing when s.Scale is an odd value
-		offset := s.Scale % int64(numHosts)
+		offset := int(s.Scale) % int(numHosts)
 
 		log.Debug("Number of hosts: ", numHosts)
 		log.Debugf("Scale: %d, expected per host: %d", s.Scale, perHost)
@@ -148,55 +226,80 @@ func Rebalance(client *rancher.RancherClient, projectId string, labelFilter stri
 					break;
 				}
 
-				log.Debugf("Host %s is over-scheduled by %d containers", m.HostId, toDeleteCount)
-
 				// get the host by id and de-activate it
 				host, err := client.Host.ById(m.HostId)
 				if err != nil {
 					log.Error(err)
+					return
 				}
 
+				log.Debugf("Host %s is over-scheduled by %d containers", host.Hostname, toDeleteCount)
+
 				// first, de-active the host
-				deactivation, err := client.Host.ActionDeactivate(host)
-				if err != nil {
-					log.Error(err, deactivation)
+				if (dryRun) {
+					log.Infof("Dry run mode, simulate to deactivate host %s", host.Hostname)
+				} else {
+					deactivation, err := client.Host.ActionDeactivate(host)
+					if err != nil {
+						log.Error(err, deactivation)
+					}
+					log.Debugf("Host %s deactivated", m.Hostname)
 				}
-				log.Debugf("host %s deactivated", m.HostId)
 
 				// second, kill the containers on the host
 				// we only delete number of containers greater than desired number
-				log.Debugf("kill %d containers on %s", toDeleteCount, m.HostId)
+				log.Infof("About to kill %d containers on %s", toDeleteCount, m.HostId)
 				deleted := 0
+				deletedContainerInfo := ""
 				for _, containerId := range m.ContainerIds {
-					log.Debugf("delete container %s ", containerId)
-					container := r.GetContainerById(client, containerId)
-					err := client.Container.Delete(container)
-					if err != nil {
-						log.Error(err)
-					}
+					if (dryRun) {
+						log.Infof("Dry run mode, simulate to delete container %s", containerId)
+					} else {
+						log.Debugf("Deleting container %s ", containerId)
+						container := r.GetContainerById(client, containerId)
 
-					deleted++
-					if deleted >= toDeleteCount {
-						break
+						err := client.Container.Delete(container)
+						if err != nil {
+							log.Error(err)
+						}
+
+						deleted++
+
+						if deletedContainerInfo != "" { deletedContainerInfo += "\n" }
+						deletedContainerInfo += containerId + " | " + container.Name
+
+						if deleted >= toDeleteCount { break }
 					}
 				}
 
 				// a healthy snooze to allow re-scheduling to occur
 				// multiple containers can be deleted at same time so required
 				// delay time is not linear but 30s can be a best guess
-				time.Sleep(30 * time.Second)
+				if (dryRun) {
+					log.Infof("Dry run mode, simulate to wait...")
+				} else {
+					time.Sleep(30 * time.Second)
+				}
 
 				// third, re-active the host
-				// get the host by id and de-activate it
-				host, err = client.Host.ById(m.HostId)
-				if err != nil {
-					log.Error(err)
+				if (dryRun) {
+					log.Infof("Dry run mode, simulate to activate host %s", host.Hostname)
+				} else {
+					host, err := client.Host.ById(m.HostId)
+					if err != nil {
+						log.Error(err)
+					}
+
+					activation, err := client.Host.ActionActivate(host)
+					if err != nil {
+						log.Error(err, activation)
+					}
+					log.Debugf("Host %s re-activated", host.Hostname)
+
+					defaultMsg := "{\"channel\":\"" + c.String("slack-channel") + "\",\"username\":\"Rancher Rebalancer\", \"attachments\": [{\"color\":\"good\",\"fields\":[{\"title\":\"Unbalanced Service\",\"value\":\""+serviceRef+"\",\"short\":\"true\"},{\"title\":\"Unbalanced Host\", \"value\":\""+host.Hostname+"\",\"short\":\"true\"},{\"title\":\"Service Scale\", \"value\":\""+ strconv.Itoa(int(s.Scale)) +"\",\"short\":\"true\"},{\"title\":\"Total Host Number\", \"value\":\""+ strconv.Itoa(numHosts) +"\",\"short\":\"true\"},{\"title\":\"Action Performed\",\"value\": \""+ strconv.Itoa(toDeleteCount) +" container(s) have been rescheduled to other host(s)\"},{\"title\":\"Deleted Containers\",\"value\": \"" + deletedContainerInfo + "\"}]}]}"
+
+					NotifySlack(c, defaultMsg)
 				}
-				activation, err := client.Host.ActionActivate(host)
-				if err != nil {
-					log.Error(err, activation)
-				}
-				log.Debugf("host %s re-activated", m.HostId)
 			}
 		}
 		log.Infof("Finished checking %s", serviceRef)
