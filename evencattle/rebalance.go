@@ -3,14 +3,10 @@ package evencattle
 import (
 	"strings"
 	"time"
-	"bytes"
 	"strconv"
-	"io/ioutil"
-	"net/http"
 
 	"github.com/urfave/cli"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/flaccid/slack-incoming-webhook-tools/util"
 	r "github.com/ScentreGroup/rancher-rebalancer/rancher"
 	log "github.com/Sirupsen/logrus"
 	rancher "github.com/rancher/go-rancher/v2"
@@ -21,73 +17,6 @@ type HostContainerCount struct {
 	Hostname     string
 	Count        int
 	ContainerIds []string
-}
-
-func NotifySlack(c *cli.Context, msg string) {
-	if len(c.String("webhook-url")) < 1 {
-		log.Debugf("No webhook url provided so no sending notification to slack")
-		return
-	}
-
-	url := c.String("webhook-url")
-	var payload []byte
-
-	// use default message
-	if len(c.String("payload")) < 1 && len(c.String("template")) < 1 {
-		payload = []byte(msg)
-	} else if len(c.String("payload")) >= 1{
-		payload = []byte(c.String("payload"))
-	} else {
-		// get environment variables to supply to the template
-		env := util.ReadEnv()
-		log.Debug("env: ", env)
-
-		// load template
-		t, err := util.Parse(c.String("template"))
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// render the template
-		var tpl bytes.Buffer
-		if err := t.Execute(&tpl, env); err != nil {
-			log.Fatal(err)
-		}
-		log.Debug("rendered: ", tpl.String())
-
-		payload = []byte(tpl.String())
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-
-	log.WithFields(log.Fields{
-		"payload": string(payload),
-		"headers": req.Header,
-	}).Debug("request")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.WithFields(log.Fields{
-		"status":  resp.Status,
-		"headers": resp.Header,
-		"body":    string(body),
-	}).Debug("response")
-
-	return
 }
 
 //func Rebalance(client *rancher.RancherClient, projectId string, labelFilter string, dryRun bool, slackWebhookUrl string, slackChannel string) {
@@ -108,12 +37,12 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 
 	// if a label filter is provided, remove all services without that label
 	if len(labelFilter) > 0 {
-		log.Debugf("Finding services with %s label", labelFilter)
+		log.Debugf("finding services with %s label", labelFilter)
 		label := strings.Split(labelFilter, "=")
 		for _, s := range collection {
 			for k, v := range s.LaunchConfig.Labels {
 				if k == label[0] && v == label[1] {
-					log.Debugf("Found service, '%s'", s.Name)
+					log.Debugf("found service, '%s'", s.Name)
 					services = append(services, s)
 					break
 				}
@@ -125,7 +54,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 
 	// bail if there is nothing to balance
 	if len(services) < 1 {
-		log.Info("No candidate service to rebalance was found")
+		log.Info("no candidate service to rebalance was found")
 		return
 	}
 
@@ -138,20 +67,20 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 
 		// reject an inactive service
 		if s.State == "inactive" {
-			log.Debugf("Skipping inactive service %s", serviceRef)
+			log.Debugf("skipping inactive service %s", serviceRef)
 			excluded = true
 		}
 
 		// reject a service with a scale:1
 		if s.Scale == 1 {
-			log.Debugf("Skipping service %s whose scale is 1", serviceRef)
+			log.Debugf("skipping service %s whose scale is 1", serviceRef)
 			excluded = true
 		}
 
 		// reject a global service
 		for k, v := range s.LaunchConfig.Labels {
 			if k == "io.rancher.scheduler.global" && v == "true" {
-				log.Debugf("Skipping global service %s", serviceRef)
+				log.Debugf("skipping global service %s", serviceRef)
 				excluded = true
 			} else if k == "io.rancher.scheduler.affinity:host_label" {
 				log.Debugf("%s has affinity host Label as %s", serviceRef, v.(string))
@@ -162,7 +91,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 		var spread []*HostContainerCount
 
 		if excluded {
-			log.Debugf("Service %s has been excluded", serviceRef)
+			log.Debugf("service %s has been excluded", serviceRef)
 		} else {
 			// move onto balancing the service if not excluded
 
@@ -207,22 +136,22 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 		// this is to avoid endless rebalancing when s.Scale is an odd value
 		offset := int(s.Scale) % int(numHosts)
 
-		log.Debug("Number of hosts: ", numHosts)
-		log.Debugf("Scale: %d, expected per host: %d", s.Scale, perHost)
+		log.Debug("number of hosts: ", numHosts)
+		log.Debugf("scale: %d, expected per host: %d", s.Scale, perHost)
 
 		log.WithFields(log.Fields{
 			"containers": s.InstanceIds,
 			"host_count": numHosts,
 			"scale": s.Scale,
 			"expected_per_host": perHost,
-		}).Infof("Start to check %s", serviceRef)
+		}).Infof("start to check %s", serviceRef)
 
 		// iterate over each host in spread
 		for _, m := range spread {
 			if m.Count > int(perHost) {
 				toDeleteCount := m.Count - int(perHost)
 				if (offset != 0 && toDeleteCount == 1) {
-					log.Info("No need to balance as total container number is odd")
+					log.Info("no need to balance as total container number is odd")
 					break;
 				}
 
@@ -233,29 +162,29 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 					return
 				}
 
-				log.Debugf("Host %s is over-scheduled by %d containers", host.Hostname, toDeleteCount)
+				log.Debugf("host %s is over-scheduled by %d containers", host.Hostname, toDeleteCount)
 
 				// first, de-active the host
 				if (dryRun) {
-					log.Infof("Dry run mode, simulate to deactivate host %s", host.Hostname)
+					log.Infof("dry run mode, simulate to deactivate host %s", host.Hostname)
 				} else {
 					deactivation, err := client.Host.ActionDeactivate(host)
 					if err != nil {
 						log.Error(err, deactivation)
 					}
-					log.Debugf("Host %s deactivated", m.Hostname)
+					log.Debugf("host %s deactivated", m.Hostname)
 				}
 
 				// second, kill the containers on the host
 				// we only delete number of containers greater than desired number
-				log.Infof("About to kill %d containers on %s", toDeleteCount, m.HostId)
+				log.Infof("about to kill %d containers on %s", toDeleteCount, m.HostId)
 				deleted := 0
 				deletedContainerInfo := ""
 				for _, containerId := range m.ContainerIds {
 					if (dryRun) {
-						log.Infof("Dry run mode, simulate to delete container %s", containerId)
+						log.Infof("dry run mode, simulate to delete container %s", containerId)
 					} else {
-						log.Debugf("Deleting container %s ", containerId)
+						log.Debugf("deleting container %s ", containerId)
 						container := r.GetContainerById(client, containerId)
 
 						err := client.Container.Delete(container)
@@ -276,14 +205,14 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 				// multiple containers can be deleted at same time so required
 				// delay time is not linear but 30s can be a best guess
 				if (dryRun) {
-					log.Infof("Dry run mode, simulate to wait...")
+					log.Infof("dry run mode, simulate to wait...")
 				} else {
 					time.Sleep(30 * time.Second)
 				}
 
 				// third, re-active the host
 				if (dryRun) {
-					log.Infof("Dry run mode, simulate to activate host %s", host.Hostname)
+					log.Infof("dry run mode, simulate to activate host %s", host.Hostname)
 				} else {
 					host, err := client.Host.ById(m.HostId)
 					if err != nil {
@@ -294,7 +223,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 					if err != nil {
 						log.Error(err, activation)
 					}
-					log.Debugf("Host %s re-activated", host.Hostname)
+					log.Debugf("host %s re-activated", host.Hostname)
 
 					defaultMsg := "{\"channel\":\"" + c.String("slack-channel") + "\",\"username\":\"Rancher Rebalancer\", \"attachments\": [{\"color\":\"good\",\"fields\":[{\"title\":\"Unbalanced Service\",\"value\":\""+serviceRef+"\",\"short\":\"true\"},{\"title\":\"Unbalanced Host\", \"value\":\""+host.Hostname+"\",\"short\":\"true\"},{\"title\":\"Service Scale\", \"value\":\""+ strconv.Itoa(int(s.Scale)) +"\",\"short\":\"true\"},{\"title\":\"Total Host Number\", \"value\":\""+ strconv.Itoa(numHosts) +"\",\"short\":\"true\"},{\"title\":\"Action Performed\",\"value\": \""+ strconv.Itoa(toDeleteCount) +" container(s) have been rescheduled to other host(s)\"},{\"title\":\"Deleted Containers\",\"value\": \"" + deletedContainerInfo + "\"}]}]}"
 
@@ -302,6 +231,6 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 				}
 			}
 		}
-		log.Infof("Finished checking %s", serviceRef)
+		log.Infof("finished checking %s", serviceRef)
 	}
 }
