@@ -154,9 +154,8 @@ func start(c *cli.Context) error {
 	// start the health check server in a sub-process
 	evencattle.StartHealthCheck()
 
-	log.Info("entering main loop")
-
 	if c.Int("poll-interval") > 0 {
+		log.Info("entering main loop")
 		for {
 			log.Debug("scan started at ", time.Now())
 			evencattle.Rebalance(rancherClient, projectId, c)

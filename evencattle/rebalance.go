@@ -54,7 +54,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 
 	// bail if there is nothing to balance
 	if len(services) < 1 {
-		log.Info("no candidate service to rebalance was found")
+		log.Info("no candidate service(s) found to rebalance")
 		return
 	}
 
@@ -83,7 +83,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 				log.Debugf("skipping global service %s", serviceRef)
 				excluded = true
 			} else if k == "io.rancher.scheduler.affinity:host_label" {
-				log.Debugf("%s has affinity host Label as %s", serviceRef, v.(string))
+				log.Debugf("%s has affinity host label %s", serviceRef, v.(string))
 				hostLabel = v.(string)
 			}
 		}
@@ -144,14 +144,14 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 			"host_count": numHosts,
 			"scale": s.Scale,
 			"expected_per_host": perHost,
-		}).Infof("start to check %s", serviceRef)
+		}).Debugf("candidate service %s", serviceRef)
 
 		// iterate over each host in spread
 		for _, m := range spread {
 			if m.Count > int(perHost) {
 				toDeleteCount := m.Count - int(perHost)
 				if (offset != 0 && toDeleteCount == 1) {
-					log.Info("no need to balance as total container number is odd")
+					log.Debugf("no need to balance as total container number is odd")
 					break;
 				}
 
@@ -166,7 +166,7 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 
 				// first, de-active the host
 				if (dryRun) {
-					log.Infof("dry run mode, simulate to deactivate host %s", host.Hostname)
+					log.Debugf("dry run mode, simulate to deactivate host %s", host.Hostname)
 				} else {
 					deactivation, err := client.Host.ActionDeactivate(host)
 					if err != nil {
@@ -177,12 +177,12 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 
 				// second, kill the containers on the host
 				// we only delete number of containers greater than desired number
-				log.Infof("about to kill %d containers on %s", toDeleteCount, m.HostId)
+				log.Debugf("about to kill %d containers on %s", toDeleteCount, m.HostId)
 				deleted := 0
 				deletedContainerInfo := ""
 				for _, containerId := range m.ContainerIds {
 					if (dryRun) {
-						log.Infof("dry run mode, simulate to delete container %s", containerId)
+						log.Debugf("dry run mode, simulate to delete container %s", containerId)
 					} else {
 						log.Debugf("deleting container %s ", containerId)
 						container := r.GetContainerById(client, containerId)
@@ -205,14 +205,14 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 				// multiple containers can be deleted at same time so required
 				// delay time is not linear but 30s can be a best guess
 				if (dryRun) {
-					log.Infof("dry run mode, simulate to wait...")
+					log.Debugf("dry run mode, simulate to wait...")
 				} else {
 					time.Sleep(30 * time.Second)
 				}
 
 				// third, re-active the host
 				if (dryRun) {
-					log.Infof("dry run mode, simulate to activate host %s", host.Hostname)
+					log.Debugf("dry run mode, simulate to activate host %s", host.Hostname)
 				} else {
 					host, err := client.Host.ById(m.HostId)
 					if err != nil {
@@ -231,6 +231,6 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 				}
 			}
 		}
-		log.Infof("finished checking %s", serviceRef)
+		log.Debugf("finished processing %s", serviceRef)
 	}
 }
