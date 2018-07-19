@@ -207,7 +207,11 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 				if (dryRun) {
 					log.Debugf("dry run mode, simulate to wait...")
 				} else {
-					time.Sleep(30 * time.Second)
+					if (toDeleteCount > 5) {
+						time.Sleep(time.Duration(toDeleteCount) * 10 * time.Second)
+					} else {
+						time.Sleep(30 * time.Second)
+					}
 				}
 
 				// third, re-active the host
