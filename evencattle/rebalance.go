@@ -173,6 +173,8 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 						log.Error(err, deactivation)
 					}
 					log.Debugf("host %s deactivated", m.Hostname)
+
+					time.Sleep(5 * time.Second)
 				}
 
 				// second, kill the containers on the host
@@ -232,6 +234,9 @@ func Rebalance(client *rancher.RancherClient, projectId string, c *cli.Context) 
 					defaultMsg := "{\"channel\":\"" + c.String("slack-channel") + "\",\"username\":\"Rancher Rebalancer\", \"attachments\": [{\"color\":\"good\",\"fields\":[{\"title\":\"Unbalanced Service\",\"value\":\""+serviceRef+"\",\"short\":\"true\"},{\"title\":\"Unbalanced Host\", \"value\":\""+host.Hostname+"\",\"short\":\"true\"},{\"title\":\"Service Scale\", \"value\":\""+ strconv.Itoa(int(s.Scale)) +"\",\"short\":\"true\"},{\"title\":\"Total Host Number\", \"value\":\""+ strconv.Itoa(numHosts) +"\",\"short\":\"true\"},{\"title\":\"Action Performed\",\"value\": \""+ strconv.Itoa(toDeleteCount) +" container(s) have been rescheduled to other host(s)\"},{\"title\":\"Deleted Containers\",\"value\": \"" + deletedContainerInfo + "\"}]}]}"
 
 					NotifySlack(c, defaultMsg)
+
+					// wait is needed here, otherwise rebalancing for next service may happen before this host is active
+					time.Sleep(5 * time.Second)
 				}
 			}
 		}
